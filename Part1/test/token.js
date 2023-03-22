@@ -1,38 +1,64 @@
 const { expect } = require("chai");
 
-describe("Token Contract", function () {
-    it("Deployment should assign the total supply of tokens to the owner", async function (){
-        const [owner] = await ethers.getSigners();
+describe("Token Comtract", function () {
+  let Token;
+  let hardhatToken;
+  let owner;
+  let addr1;
+  let addr2;
+  let addrs;
 
-        // A Signer in Ethers.js is an object that represents an Ethereum account. It's used to send transactions to contracts and other accounts. Here we're getting a list of the accounts in the node we're connected to, which in this case is Hardhat Network, and only keeping the first and second ones.
+  // it will run before every test
+  beforeEach(async function () {
+    Token = await ethers.getContractFactory("Token");
+    [owner, addr1, addr2, ...addrs] = await ethers.getSigners();
+    hardhatToken = await Token.deploy();
+  });
+  describe("deployment", function () {
+    it("Should set the right owner", async function () {
+      expect(await hardhatToken.owner()).to.equal(owner.address);
+    });
+    it("Should assign the total supply of token to the owner", async function () {
+      const ownerBalance = await hardhatToken.balanceof(owner.address);
+      expect(await hardhatToken.totalSupply()).to.equal(ownerBalance);
+    });
+  });
+  describe("Transations", function () {
+    it("Should transfer between accounts", async function () {
+      // owner account to addr1.address
+      await hardhatToken.transfer(addr1.address, 5);
+      const addr1Balance = await hardhatToken.balanceof(addr1.address);
+      expect(addr1Balance).to.equal(5);
 
-        // console.log("Singer object:", owner);
-        const Token = await ethers.getContractFactory("Token");
-// A ContractFactory in ethers.js is an abstraction used to deploy new smart contracts, so Greeter here is a factory for instances of our greeter contract.
-        const hardhatToken = await Token.deploy();
-
-        const ownerBalance = await hardhatToken.balanceof(owner.address);
-        // console.log("Owner Address:", owner.address);
-
-        expect(await hardhatToken.totalSupply()).to.equal(ownerBalance);
+      await hardhatToken.connect(addr1).transfer(addr2.address, 5);
+      const addr2Balance = await hardhatToken.balanceof(addr2.address);
+      expect(addr2Balance).to.equal(5);
     });
 
-    it("Should transfer token between accounts", async function (){
-        const [owner, addr1, addr2] = await ethers.getSigners();
+    it ("Should fall if sender does not have enought tokens",
+      async function () {
+        const initialOwnerBalance = await hardhatToken.balanceof(owner.address);
+        await expect(
+          hardhatToken.connect(addr1).transfer(owner.address, 1)
+        ).to.be.revertedWith("Not enough Tokens");
+        expect(await hardhatToken.balanceof(owner.address)).to.equal(
+          initialOwnerBalance
+        );
+      });
 
-        const Token = await ethers.getContractFactory("Token");
+       it("should update balance after transfer", async function (){
+        const initialOwnerBalance = await hardhatToken.balanceof(owner.address);
+        await hardhatToken.transfer(addr1.address, 5);
+        await hardhatToken.transfer(addr2.address, 10);
 
-        const hardhatToken = await Token.deploy();
+        const finalOwnerBalance = await hardhatToken.balanceof(owner.address);
+        expect(finalOwnerBalance).to.equal(initialOwnerBalance-15);
+        
+        const addr1Balance = await hardhatToken.balanceof(addr1.address);
+        expect(addr1Balance).to.equal(5);
+        const addr2Balance = await hardhatToken.balanceof(addr2.address);
+        expect(addr2Balance).to.equal(10);
 
-        // transfer 10 token from owner to addr1
-
-        await hardhatToken.transfer(addr1.address, 10);
-        expect(await hardhatToken.balanceof(addr1.address)).to.equal(10);
-
-        // Transfer 5 token from addr1 to addr2  
-
-        await hardhatToken.connect(addr1).transfer(addr2.address, 5);
-        expect(await hardhatToken.balanceof(addr2.address)).to.equal(5);
-
-    });
-}); 
+       });
+  });
+});
